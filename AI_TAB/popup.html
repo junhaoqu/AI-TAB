@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tab Organizer</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Tab Organizer</h1>
+        <p class="description">Keep your tabs tidy and organized.</p>
+        
+        <button id="quick-group" class="btn primary">
+            🚀 Quick Organize (URL-based)
+        </button>
+
+        <div class="divider">
+            <span>OR</span>
+        </div>
+
+        <button id="ai-group" class="btn primary ai-button">
+            ✨ AI Smart Organize (Content-based)
+        </button>
+
+        <button id="ungroup-tabs" class="btn secondary">
+            🔄 Ungroup All Tabs (Current Window)
+        </button>
+        
+        <!-- API Key section - Initially hidden --><div id="api-key-section" class="form-section hidden">
+            <p class="section-description">
+                Enter your Google Gemini API Key for AI-powered grouping.
+            </p>
+            <div class="form-group">
+                <label for="api-key">Gemini API Key:</label>
+                <div class="input-wrapper">
+                    <input type="password" id="api-key" placeholder="Paste your API Key here" autocomplete="off">
+                    <button id="save-key" class="btn small">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="status-message" class="status"></div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html>
