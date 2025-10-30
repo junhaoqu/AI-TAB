@@ -1,4 +1,67 @@
 const PROMPT_OUTPUT_LANGUAGE = 'en';
+const TEXT_MAP = window.I18N?.TEXT_MAP || {};
+let currentLanguageCode = 'en';
+let currentTranslationMap = window.I18N?.getLanguageText?.('en') || {};
+
+function resolveLanguageCode(value) {
+    if (!value || value === 'browser') {
+        const browserLang = chrome.i18n?.getUILanguage?.() || navigator.language || 'en';
+        return (browserLang || 'en').toLowerCase();
+    }
+    return value.toLowerCase();
+}
+
+function translateText(defaultText) {
+    if (!defaultText) return '';
+    return currentTranslationMap[defaultText] || defaultText;
+}
+
+function t(key) {
+    const defaultText = window.I18N?.getDefault?.(key) || key;
+    return translateText(defaultText);
+}
+
+function formatTextKey(key, variables = {}) {
+    let text = t(key);
+    Object.entries(variables).forEach(([name, value]) => {
+        text = text.replace(`{${name}}`, value);
+    });
+    return text;
+}
+
+async function initializeLanguage() {
+    try {
+        const { groupLanguage } = await chrome.storage.sync.get(['groupLanguage']);
+        currentLanguageCode = resolveLanguageCode(groupLanguage);
+        currentTranslationMap = window.I18N?.getLanguageText?.(currentLanguageCode) || {};
+    } catch (error) {
+        console.warn('Failed to load UI translations for popup:', error);
+        currentLanguageCode = resolveLanguageCode('browser');
+        currentTranslationMap = window.I18N?.getLanguageText?.(currentLanguageCode) || {};
+    }
+    applyPopupTranslations();
+}
+
+function applyPopupTranslations() {
+    document.querySelectorAll('[data-i18n-key]').forEach(el => {
+        const key = el.getAttribute('data-i18n-key');
+        const translated = t(key);
+        if (translated) {
+            el.textContent = translated;
+        }
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        const translated = t(key);
+        if (translated) {
+            el.setAttribute('placeholder', translated);
+        }
+    });
+    const statusEl = document.getElementById('status-message');
+    if (statusEl && statusEl.textContent) {
+        statusEl.textContent = translateText(statusEl.textContent);
+    }
+}
 
 const CATEGORY_TRANSLATIONS = {
     "zh-cn": {
@@ -289,7 +352,8 @@ const COMMON_TLDS = new Set([
     'sk', 'si', 'lt', 'lv', 'ee', 'ua', 'pe'
 ]);
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await initializeLanguage();
     const apiKeyInput = document.getElementById('api-key');
     const saveKeyButton = document.getElementById('save-key');
     const quickGroupButton = document.getElementById('quick-group');
@@ -325,7 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.runtime.openOptionsPage(() => {
             if (chrome.runtime.lastError) {
                 console.error('Failed to open settings page:', chrome.runtime.lastError.message);
-                showStatus('Unable to open settings page.', 'error');
+                showStatusKey('status.openSettingsFailed', 'error');
             }
         });
     });
@@ -336,18 +400,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (apiKey) {
             chrome.storage.sync.set({ apiKey: apiKey }, () => {
                 currentApiKey = apiKey; // 更新内存中的 Key
-                showStatus('API Key saved successfully!', 'success');
+                showStatusKey('status.apiSaved', 'success');
                 apiKeySection.classList.add('hidden');
                 apiKeyHelpLink.classList.add('hidden');
             });
         } else {
-            showStatus('Please enter a valid API Key.', 'error');
+            showStatusKey('status.apiInvalid', 'error');
         }
     });
 
     // --- 快速分组按钮 ---
     quickGroupButton.addEventListener('click', () => {
-        showStatus('Organizing tabs quickly...', 'info');
+        showStatusKey('status.quickOrganize');
         disableButtons(true);
         apiKeySection.classList.add('hidden');
         apiKeyHelpLink.classList.add('hidden');
@@ -358,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (localPromptButton) {
         localPromptButton.addEventListener('click', async () => {
-            showStatus('Organizing tabs with Chrome AI...', 'info');
+            showStatusKey('status.chromeOrganize');
             disableButtons(true);
             apiKeySection.classList.add('hidden');
             apiKeyHelpLink.classList.add('hidden');
@@ -366,7 +430,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 await runLocalPromptGrouping();
             } catch (error) {
                 console.error('Chrome AI grouping failed:', error);
-                showStatus(error.message || 'Chrome AI grouping failed. Falling back to quick organize.', 'error');
+                const fallback = error && error.message ? translateText(error.message) : t('status.chromeFallback');
+                showStatus(fallback, 'error');
                 chrome.runtime.sendMessage({ action: "quickGroup" }, (response) => {
                     handleResponse(response);
                 });
@@ -380,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // AI 分组前，检查内存中是否有 API Key
         if (currentApiKey) {
             // 如果有 Key，直接发送 "aiGroup" 指令
-            showStatus('Initiating online AI organization...', 'info');
+            showStatusKey('status.onlineOrganize');
             disableButtons(true);
             apiKeySection.classList.add('hidden');
             apiKeyHelpLink.classList.add('hidden');
@@ -389,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } else {
             // 如果没有 Key，显示 API Key 输入框
-            showStatus('Please enter your Gemini API Key for AI grouping.', 'info');
+            showStatusKey('status.needApiKey');
             apiKeySection.classList.remove('hidden'); // 显示 API Key 部分
             apiKeyInput.focus();
             apiKeyHelpLink.classList.remove('hidden');
@@ -398,7 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Ungroup Tabs 按钮 ---
     ungroupButton.addEventListener('click', () => {
-        showStatus('Removing groups from current window...', 'info');
+        showStatusKey('status.removeGroups');
         disableButtons(true);
         apiKeySection.classList.add('hidden');
         apiKeyHelpLink.classList.add('hidden');
@@ -414,10 +479,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (target.classList.contains('ungroup-group-button')) {
                 const groupId = Number(target.dataset.groupId);
                 if (!Number.isInteger(groupId)) {
-                    showStatus('Invalid group identifier.', 'error');
+                    showStatusKey('status.invalidGroup', 'error');
                     return;
                 }
-                showStatus('Ungrouping selected group...', 'info');
+                showStatusKey('status.ungroupSelected');
                 disableButtons(true);
                 chrome.runtime.sendMessage({ action: "ungroupGroup", groupId }, (response) => {
                     handleResponse(response);
@@ -428,15 +493,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     refreshGroups();
 
+    chrome.runtime.onMessage.addListener((request) => {
+        if (request?.action === 'groupLanguageUpdated') {
+            initializeLanguage()
+                .then(() => translateGroupTitles())
+                .then(() => refreshGroups())
+                .catch(error => {
+                    console.warn('Failed to refresh popup language:', error);
+                });
+        }
+    });
+
     // 统一处理来自后台的响应
     function handleResponse(response) {
         if (chrome.runtime.lastError) {
-            showStatus('An error occurred, please try again.', 'error');
+            showStatusKey('status.genericError', 'error');
             console.error(chrome.runtime.lastError.message);
         } else if (response && response.status) {
             showStatus(response.status, response.type || 'info');
         } else {
-             showStatus('Unknown response from background script.', 'error');
+             showStatusKey('status.unknownResponse', 'error');
         }
         disableButtons(false); // 任务结束后恢复按钮
         const previousText = statusMessage.textContent;
@@ -473,22 +549,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 辅助函数：显示状态消息
     function showStatus(message, type = 'info') {
-        statusMessage.textContent = message;
+        statusMessage.textContent = translateText(message);
         statusMessage.className = `status ${type}`; // 'success', 'error', 'info'
+    }
+
+    function showStatusKey(key, type = 'info', variables = {}) {
+        showStatus(formatTextKey(key, variables), type);
     }
 
     function refreshGroups() {
         if (!groupListContainer) return;
-        groupListContainer.innerHTML = '<p class="group-placeholder">Loading groups…</p>';
+        groupListContainer.innerHTML = `<p class="group-placeholder">${t('popup.groups.loading')}</p>`;
         chrome.runtime.sendMessage({ action: "listGroups" }, (response) => {
             if (chrome.runtime.lastError) {
                 console.error('Failed to load groups:', chrome.runtime.lastError.message);
-                groupListContainer.innerHTML = '<p class="group-placeholder">Unable to load groups.</p>';
+                groupListContainer.innerHTML = `<p class="group-placeholder">${t('popup.groups.unable')}</p>`;
                 return;
             }
 
             if (!response || !Array.isArray(response.groups)) {
-                groupListContainer.innerHTML = '<p class="group-placeholder">No groups information available.</p>';
+                groupListContainer.innerHTML = `<p class="group-placeholder">${t('popup.groups.noinfo')}</p>`;
                 return;
             }
 
@@ -499,7 +579,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderGroupList(groups) {
         groupListContainer.innerHTML = '';
         if (!groups.length) {
-            groupListContainer.innerHTML = '<p class="group-placeholder">No tab groups in this window.</p>';
+            groupListContainer.innerHTML = `<p class="group-placeholder">${t('popup.groups.none')}</p>`;
             return;
         }
 
@@ -512,12 +592,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const title = document.createElement('span');
             title.className = 'group-title';
-            title.textContent = group.title || `Group ${group.id}`;
+            title.textContent = group.title || formatTextKey('popup.groups.fallbackTitle', { id: group.id });
 
             const meta = document.createElement('span');
             meta.className = 'group-meta';
             const tabCount = Number(group.tabCount) || 0;
-            meta.textContent = `${tabCount} tab${tabCount === 1 ? '' : 's'}`;
+            const countKey = tabCount === 1 ? 'popup.groups.tabCountSingular' : 'popup.groups.tabCountPlural';
+            meta.textContent = formatTextKey(countKey, { count: tabCount });
 
             info.appendChild(title);
             info.appendChild(meta);
@@ -525,7 +606,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const actionButton = document.createElement('button');
             actionButton.className = 'btn small secondary ungroup-group-button';
             actionButton.dataset.groupId = String(group.id);
-            actionButton.textContent = 'Ungroup';
+            actionButton.textContent = t('popup.buttons.ungroupSingle');
 
             item.appendChild(info);
             item.appendChild(actionButton);
@@ -546,33 +627,38 @@ document.addEventListener('DOMContentLoaded', () => {
         const tabs = await chrome.tabs.query({ currentWindow: true });
         const ungroupedTabs = tabs.filter(tab => tab.groupId === TAB_GROUP_ID_NONE);
         if (ungroupedTabs.length === 0) {
-            showStatus('No ungrouped tabs to organize.', 'info');
+            showStatusKey('status.noUngrouped', 'info');
             disableButtons(false);
             refreshGroups();
             return;
         }
 
         if (!('LanguageModel' in self) || typeof LanguageModel.create !== 'function') {
-            throw new Error('Prompt API not supported in this browser.');
+            throw new Error(TEXT_MAP['status.chromeUnsupported']);
         }
 
         const availability = await LanguageModel.availability?.({
+            model: '1.5-flash',
+            output: { language: PROMPT_OUTPUT_LANGUAGE },
             outputLanguage: PROMPT_OUTPUT_LANGUAGE,
             responseLanguage: PROMPT_OUTPUT_LANGUAGE
         }) ?? 'unavailable';
         if (availability === 'unavailable') {
-            throw new Error('Prompt API unavailable on this device.');
+            throw new Error(TEXT_MAP['status.chromeUnavailable']);
         }
         if ((availability === 'downloadable' || availability === 'downloading') && !(navigator.userActivation?.isActive)) {
-            throw new Error('Please click again to download the model (user activation required).');
+            throw new Error(TEXT_MAP['status.chromeActivation']);
         }
 
         const params = await LanguageModel.params?.({
+            model: '1.5-flash',
+            output: { language: PROMPT_OUTPUT_LANGUAGE },
             outputLanguage: PROMPT_OUTPUT_LANGUAGE,
             responseLanguage: PROMPT_OUTPUT_LANGUAGE
         });
         const sessionOptions = {
             model: '1.5-flash',
+            output: { language: PROMPT_OUTPUT_LANGUAGE },
             outputLanguage: PROMPT_OUTPUT_LANGUAGE,
             responseLanguage: PROMPT_OUTPUT_LANGUAGE
         };
@@ -583,19 +669,19 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionOptions.monitor = (monitor) => {
             monitor.addEventListener('downloadprogress', (event) => {
                 const percent = event.total ? Math.round((event.loaded / event.total) * 100) : Math.round(event.loaded * 100);
-                showStatus(`Downloading Chrome AI model... ${percent}%`, 'info');
+                showStatusKey('status.chromeDownloading', 'info', { percent });
             });
         };
 
-        showStatus('Preparing Chrome AI model...', 'info');
-        sessionOptions.outputLanguage = PROMPT_OUTPUT_LANGUAGE;
+        showStatusKey('status.chromePreparing');
         const session = await LanguageModel.create(sessionOptions);
 
-        showStatus('Classifying tabs with Chrome AI...', 'info');
+        showStatusKey('status.chromeClassifying');
         const promptText = buildPromptPayload(ungroupedTabs);
         let rawResponse = '';
         try {
             const result = await session.prompt(promptText, {
+                output: { language: PROMPT_OUTPUT_LANGUAGE },
                 outputLanguage: PROMPT_OUTPUT_LANGUAGE,
                 responseLanguage: PROMPT_OUTPUT_LANGUAGE
             });
@@ -626,42 +712,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         let translator = null;
+        let translatorReady = false;
         if ('Translator' in self && typeof Translator.create === 'function') {
             try {
-                const availability = await Translator.availability({ 
-                    sourceLanguage: 'en', 
-                    targetLanguage, 
-                    outputLanguage: PROMPT_OUTPUT_LANGUAGE 
+                const availability = await Translator.availability({
+                    sourceLanguage: 'en',
+                    targetLanguage
                 });
-                if (availability !== 'unavailable') {
-                    if ((availability === 'downloadable' || availability === 'downloading') && !(navigator.userActivation?.isActive)) {
-                        console.warn('User activation required to download translator model.');
-                    }
+                if (availability === 'unavailable') {
+                    translatorReady = false;
+                } else if ((availability === 'downloadable' || availability === 'downloading') && !(navigator.userActivation?.isActive)) {
+                    console.warn('User activation required to download translator model.');
+                    translatorReady = false;
+                } else {
                     translator = await Translator.create({
                         sourceLanguage: 'en',
                         targetLanguage,
-                        outputLanguage: PROMPT_OUTPUT_LANGUAGE,
                         monitor(monitor) {
                             monitor.addEventListener('downloadprogress', (event) => {
                                 const percent = event.total ? Math.round((event.loaded / event.total) * 100) : Math.round(event.loaded * 100);
-                                showStatus(`Downloading translator... ${percent}%`, 'info');
+                                showStatusKey('status.translatorDownloading', 'info', { percent });
                             });
                         }
                     });
+                    translatorReady = Boolean(translator);
                 }
             } catch (error) {
                 console.warn('Translator API session failed:', error);
                 translator = null;
+                translatorReady = false;
             }
-        }
+        } 
 
         const dictionary = getDictionaryForLanguage(targetLanguage);
 
         for (const title of uniqueTitles.keys()) {
             let translated = null;
-            if (translator) {
+            if (translatorReady && translator) {
                 try {
-                    translated = await translator.translate(title, { outputLanguage: PROMPT_OUTPUT_LANGUAGE });
+                    translated = await translator.translate(title);
                 } catch (error) {
                     console.warn(`Translator API failed for "${title}":`, error);
                 }

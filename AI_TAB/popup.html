@@ -4,57 +4,58 @@
     <meta charset="UTF-8">
     <title>Tab Organizer</title>
     <link rel="stylesheet" href="popup.css">
+    <script src="i18n.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>Tab Organizer</h1>
-        <p class="description">Keep your tabs tidy and organized.</p>
+        <h1 data-i18n-key="popup.title">Tab Organizer</h1>
+        <p class="description" data-i18n-key="popup.description">Keep your tabs tidy and organized.</p>
         
-        <button id="quick-group" class="btn primary">
+        <button id="quick-group" class="btn primary" data-i18n-key="popup.buttons.quick">
             🚀 Quick Organize
         </button>
 
         <div class="divider">
-            <span>OR</span>
+            <span data-i18n-key="popup.divider.or">OR</span>
         </div>
 
-        <button id="local-prompt-group" class="btn primary">
+        <button id="local-prompt-group" class="btn primary" data-i18n-key="popup.buttons.chrome">
             💻 Chrome AI Organize
         </button>
 
-        <button id="ai-group" class="btn primary ai-button">
+        <button id="ai-group" class="btn primary ai-button" data-i18n-key="popup.buttons.online">
             ✨ Online AI Organize
         </button>
 
-        <button id="open-settings" class="btn primary">
+        <button id="open-settings" class="btn primary" data-i18n-key="popup.buttons.settings">
             ⚙️ Settings
         </button>
 
-        <button id="ungroup-tabs" class="btn secondary">
+        <button id="ungroup-tabs" class="btn secondary" data-i18n-key="popup.buttons.ungroup">
             🔄 Ungroup All Tabs
         </button>
         
         <!-- API Key section -->
         <div id="api-key-section" class="form-section hidden">
-            <p class="section-description">
+            <p class="section-description" data-i18n-key="popup.api.description">
                 Enter your Google Gemini API Key for AI-powered grouping.
             </p>
             <div class="form-group">
-                <label for="api-key">Gemini API Key:</label>
+                <label for="api-key" data-i18n-key="popup.api.label">Gemini API Key:</label>
                 <div class="input-wrapper">
-                    <input type="password" id="api-key" placeholder="Paste your API Key here" autocomplete="off">
-                    <button id="save-key" class="btn small">Save</button>
+                    <input type="password" id="api-key" placeholder="Paste your API Key here" autocomplete="off" data-i18n-placeholder="popup.api.placeholder">
+                    <button id="save-key" class="btn small" data-i18n-key="options.buttons.save">Save</button>
                 </div>
             </div>
-            <a id="api-key-doc" class="help-link hidden" href="https://ai.google.dev/gemini-api/docs/api-key#set-api-env-var" target="_blank" rel="noopener noreferrer" title="How to get a Gemini API key">
+            <a id="api-key-doc" class="help-link hidden" href="https://ai.google.dev/gemini-api/docs/api-key#set-api-env-var" target="_blank" rel="noopener noreferrer" title="How to get a Gemini API key" data-i18n-key="popup.api.help">
                 🔗 How to get API key
             </a>
         </div>
 
         <div class="group-list-section">
-            <h2>Current Tab Groups</h2>
+            <h2 data-i18n-key="popup.groups.heading">Current Tab Groups</h2>
             <div id="group-list" class="group-list">
-                <p class="group-placeholder">Loading groups…</p>
+                <p class="group-placeholder" data-i18n-key="popup.groups.loading">Loading groups…</p>
             </div>
         </div>
 

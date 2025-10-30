@@ -4,53 +4,57 @@
     <meta charset="UTF-8">
     <title>AI Tab Organizer Settings</title>
     <link rel="stylesheet" href="options.css">
+    <script src="i18n.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>API Key Settings</h1>
-        <p class="description">
+        <h1 data-i18n-key="options.title">API Key Settings</h1>
+        <p class="description" data-i18n-key="options.description">
             Manage your Google Gemini API Key. This key enables AI Smart Organize to classify tabs using page content.
         </p>
 
         <div class="model-info">
-            <h2>Model Information</h2>
+            <h2 data-i18n-key="options.modelHeading">Model Information</h2>
             <p class="model-summary">
                 Current model: <code>gemini-2.5-flash-preview-05-20</code>. The standard free tier offers free input and output tokens. Check the latest details on the <a href="https://ai.google.dev/gemini-api/docs/pricing" target="_blank" rel="noopener noreferrer">official Gemini pricing page</a>.
             </p>
         </div>
 
         <div class="form-group">
-            <label for="group-language">Grouping language</label>
+            <label for="group-language" data-i18n-key="options.languageLabel">Grouping language</label>
             <select id="group-language">
-                <option value="browser">Use browser language</option>
-                <option value="en">English</option>
-                <option value="zh-CN">简体中文 (Chinese Simplified)</option>
-                <option value="zh-TW">繁體中文 (Chinese Traditional)</option>
-                <option value="ja">日本語 (Japanese)</option>
-                <option value="ko">한국어 (Korean)</option>
-                <option value="fr">Français (French)</option>
-                <option value="de">Deutsch (German)</option>
-                <option value="es">Español (Spanish)</option>
-                <option value="pt">Português (Portuguese)</option>
+                <option value="browser" data-i18n-key="options.language.browser">Use browser language</option>
+                <option value="en" data-i18n-key="options.language.en">English</option>
+                <option value="zh-CN" data-i18n-key="options.language.zhCN">简体中文 (Chinese Simplified)</option>
+                <option value="zh-TW" data-i18n-key="options.language.zhTW">繁體中文 (Chinese Traditional)</option>
+                <option value="ja" data-i18n-key="options.language.ja">日本語 (Japanese)</option>
+                <option value="ko" data-i18n-key="options.language.ko">한국어 (Korean)</option>
+                <option value="fr" data-i18n-key="options.language.fr">Français (French)</option>
+                <option value="de" data-i18n-key="options.language.de">Deutsch (German)</option>
+                <option value="es" data-i18n-key="options.language.es">Español (Spanish)</option>
+                <option value="pt" data-i18n-key="options.language.pt">Português (Portuguese)</option>
             </select>
-            <p class="note">
+            <p class="note" data-i18n-key="options.languageNote">
                 Choose the language used for tab group titles. When set to “Use browser language”, we follow Chrome’s current UI language.
             </p>
         </div>
 
         <div class="form-group">
-            <label for="api-key-input">Gemini API Key</label>
-            <input type="password" id="api-key-input" autocomplete="off" placeholder="Paste your API key here">
+            <label for="api-key-input" data-i18n-key="options.api.label">Gemini API Key</label>
+            <input type="password" id="api-key-input" autocomplete="off" placeholder="Paste your API key here" data-i18n-placeholder="options.api.placeholder">
         </div>
 
         <div class="actions">
-            <button id="save-api-key" class="btn primary">Save Key</button>
-            <button id="clear-api-key" class="btn danger">Clear Key</button>
-            <button id="toggle-visibility" class="btn secondary">Show</button>
+            <button id="save-api-key" class="btn primary" data-i18n-key="options.buttons.save">Save Key</button>
+            <button id="clear-api-key" class="btn danger" data-i18n-key="options.buttons.clear">Clear Key</button>
+            <button id="toggle-visibility" class="btn secondary" data-i18n-key="options.buttons.show">Show</button>
         </div>
 
-        <a class="help-link" href="https://ai.google.dev/gemini-api/docs/api-key#set-api-env-var" target="_blank" rel="noopener noreferrer">
+        <a class="help-link" href="https://ai.google.dev/gemini-api/docs/api-key#set-api-env-var" target="_blank" rel="noopener noreferrer" data-i18n-key="options.help.key">
             How to get a Gemini API key
+        </a>
+        <a class="help-link" href="https://developer.chrome.com/docs/ai/built-in" target="_blank" rel="noopener noreferrer" data-i18n-key="options.help.enable">
+            How to enable built-in AI
         </a>
 
         <div id="status" class="status"></div>
