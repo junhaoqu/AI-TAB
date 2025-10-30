@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Tab Organizer Settings</title>
+    <link rel="stylesheet" href="options.css">
+</head>
+<body>
+    <div class="container">
+        <h1>API Key Settings</h1>
+        <p class="description">
+            Manage your Google Gemini API Key. This key enables AI Smart Organize to classify tabs using page content.
+        </p>
+
+        <div class="form-group">
+            <label for="api-key-input">Gemini API Key</label>
+            <input type="password" id="api-key-input" autocomplete="off" placeholder="Paste your API key here">
+        </div>
+
+        <div class="actions">
+            <button id="save-api-key" class="btn primary">Save Key</button>
+            <button id="clear-api-key" class="btn danger">Clear Key</button>
+            <button id="toggle-visibility" class="btn secondary">Show</button>
+        </div>
+
+        <a class="help-link" href="https://ai.google.dev/gemini-api/docs/api-key#set-api-env-var" target="_blank" rel="noopener noreferrer">
+            How to get a Gemini API key
+        </a>
+
+        <div id="status" class="status"></div>
+    </div>
+
+    <script src="options.js"></script>
+</body>
+</html>

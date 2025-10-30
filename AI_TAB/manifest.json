@@ -1,12 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "AI 智能标签页分组",
+  "name": "Tab Organizer",
   "version": "1.1",
-  "description": "使用 AI 自动将打开的标签页进行分组。",
+  "description": "Organize your tabs into groups using AI.",
   "permissions": [
     "tabs",
     "tabGroups",
-    "scripting",
     "storage"
   ],
   "host_permissions": [
@@ -17,9 +16,17 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_icon": "icon.png",
-    "default_title": "AI 标签页分组设置",
+    "default_icon": {
+      "16": "icons/icon_light-16.png",
+      "32": "icons/icon_light-32.png"
+    },
+    "default_title": "AI Tab Grouping Settings",
     "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "icons": {
+    "16": "icons/icon_light-16.png",
+    "48": "icons/icon_light-48.png",
+    "128": "icons/icon_light-128.png"
   }
-  
 }

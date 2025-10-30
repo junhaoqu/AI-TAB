@@ -1,0 +1,142 @@
+body {
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: #f5f7fa;
+    margin: 0;
+    padding: 40px 20px;
+    color: #2d3640;
+}
+
+.container {
+    max-width: 420px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+h1 {
+    font-size: 24px;
+    margin: 0;
+}
+
+.description {
+    font-size: 14px;
+    color: #5f6b7c;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+label {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+input[type="password"],
+input[type="text"] {
+    padding: 12px;
+    font-size: 15px;
+    border: 1px solid #d1d9e6;
+    border-radius: 8px;
+    background: #f8fafc;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input[type="password"]:focus,
+input[type="text"]:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    background: #fff;
+}
+
+.actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.btn {
+    flex-grow: 1;
+    padding: 12px 16px;
+    font-size: 15px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+.btn.primary {
+    background: #2563eb;
+    color: #fff;
+}
+
+.btn.primary:hover {
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    transform: translateY(-1px);
+}
+
+.btn.secondary {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.btn.secondary:hover {
+    box-shadow: 0 4px 12px rgba(148, 163, 184, 0.2);
+    transform: translateY(-1px);
+}
+
+.btn.danger {
+    background: #ef4444;
+    color: #fff;
+}
+
+.btn.danger:hover {
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    transform: translateY(-1px);
+}
+
+.help-link {
+    font-size: 14px;
+    color: #2563eb;
+    text-decoration: none;
+    align-self: flex-start;
+}
+
+.help-link:hover {
+    text-decoration: underline;
+}
+
+.status {
+    min-height: 24px;
+    font-size: 14px;
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+.status.success {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #bbf7d0;
+}
+
+.status.error {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+.status.info {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}

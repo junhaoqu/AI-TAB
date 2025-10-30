@@ -4,17 +4,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const quickGroupButton = document.getElementById('quick-group');
     const aiGroupButton = document.getElementById('ai-group');
     const ungroupButton = document.getElementById('ungroup-tabs');
+    const openSettingsButton = document.getElementById('open-settings');
+    const apiKeyHelpLink = document.getElementById('api-key-doc');
     const apiKeySection = document.getElementById('api-key-section'); // 新增：API Key 部分
     const statusMessage = document.getElementById('status-message');
 
     let currentApiKey = ''; // 用于存储当前加载的 API Key
+    const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    syncActionIcon(colorSchemeQuery.matches);
+    colorSchemeQuery.addEventListener('change', (event) => syncActionIcon(event.matches));
 
     // 弹出窗口打开时，加载已保存的 API Key
     chrome.storage.sync.get('apiKey', (data) => {
         if (data.apiKey) {
             currentApiKey = data.apiKey;
-            apiKeyInput.value = data.apiKey; // 仍然填充输入框，但它是隐藏的
+            apiKeyInput.value = data.apiKey;
+        } else {
+            apiKeyInput.value = '';
         }
+        apiKeySection.classList.add('hidden');
+        apiKeyHelpLink.classList.add('hidden');
+    });
+
+    openSettingsButton.addEventListener('click', () => {
+        chrome.runtime.openOptionsPage(() => {
+            if (chrome.runtime.lastError) {
+                console.error('Failed to open settings page:', chrome.runtime.lastError.message);
+                showStatus('Unable to open settings page.', 'error');
+            }
+        });
     });
 
     // 保存 API Key
@@ -24,7 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
             chrome.storage.sync.set({ apiKey: apiKey }, () => {
                 currentApiKey = apiKey; // 更新内存中的 Key
                 showStatus('API Key saved successfully!', 'success');
-                apiKeySection.classList.add('hidden'); // 成功保存后隐藏输入框
+                apiKeySection.classList.add('hidden');
+                apiKeyHelpLink.classList.add('hidden');
             });
         } else {
             showStatus('Please enter a valid API Key.', 'error');
@@ -35,8 +54,8 @@ document.addEventListener('DOMContentLoaded', () => {
     quickGroupButton.addEventListener('click', () => {
         showStatus('Organizing tabs quickly...', 'info');
         disableButtons(true);
-        apiKeySection.classList.add('hidden'); // 隐藏 API Key 部分
-
+        apiKeySection.classList.add('hidden');
+        apiKeyHelpLink.classList.add('hidden');
         chrome.runtime.sendMessage({ action: "quickGroup" }, (response) => {
             handleResponse(response);
         });
@@ -49,8 +68,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // 如果有 Key，直接发送 "aiGroup" 指令
             showStatus('Initiating AI smart organization...', 'info');
             disableButtons(true);
-            apiKeySection.classList.add('hidden'); // 隐藏 API Key 部分
-
+            apiKeySection.classList.add('hidden');
+            apiKeyHelpLink.classList.add('hidden');
             chrome.runtime.sendMessage({ action: "aiGroup" }, (response) => {
                 handleResponse(response);
             });
@@ -59,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showStatus('Please enter your Gemini API Key for AI grouping.', 'info');
             apiKeySection.classList.remove('hidden'); // 显示 API Key 部分
             apiKeyInput.focus();
+            apiKeyHelpLink.classList.remove('hidden');
         }
     });
 
@@ -67,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showStatus('Removing groups from current window...', 'info');
         disableButtons(true);
         apiKeySection.classList.add('hidden');
-
+        apiKeyHelpLink.classList.add('hidden');
         chrome.runtime.sendMessage({ action: "ungroupTabs" }, (response) => {
             handleResponse(response);
         });
@@ -91,13 +111,22 @@ document.addEventListener('DOMContentLoaded', () => {
         quickGroupButton.disabled = disabled;
         aiGroupButton.disabled = disabled;
         ungroupButton.disabled = disabled;
-        saveKeyButton.disabled = disabled && !apiKeySection.classList.contains('hidden'); // 只有在 API Key 输入框显示时才禁用保存按钮
-        apiKeyInput.disabled = disabled && !apiKeySection.classList.contains('hidden');
+        openSettingsButton.disabled = disabled;
+        saveKeyButton.disabled = disabled;
+        apiKeyInput.disabled = disabled;
     }
 
     // 辅助函数：显示状态消息
     function showStatus(message, type = 'info') {
         statusMessage.textContent = message;
         statusMessage.className = `status ${type}`; // 'success', 'error', 'info'
+    }
+
+    function syncActionIcon(isDarkMode) {
+        chrome.runtime.sendMessage({ action: "setThemeIcon", isDark: isDarkMode }, () => {
+            if (chrome.runtime.lastError) {
+                console.warn('Failed to sync icon theme:', chrome.runtime.lastError.message);
+            }
+        });
     }
 });

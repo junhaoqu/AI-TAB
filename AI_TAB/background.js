@@ -16,7 +16,7 @@ const URL_RULES = {
     'freecodecamp.org': 'Learning',
     
     // AI 工具 (AI Tools)
-    'chat.openai.com': 'AI Tools',
+    'chatgpt.com': 'AI Tools',
     'gemini.google.com': 'AI Tools',
     'poe.com': 'AI Tools',
     'huggingface.co': 'AI Tools',
@@ -91,6 +91,24 @@ const TAB_GROUP_ID_NONE = (chrome.tabGroups && typeof chrome.tabGroups.TAB_GROUP
     ? chrome.tabGroups.TAB_GROUP_ID_NONE
     : -1;
 
+const COMMON_TLDS = new Set([
+    'com', 'net', 'org', 'edu', 'gov', 'mil', 'io', 'ai', 'info', 'biz', 'xyz', 'app', 'dev',
+    'cn', 'us', 'uk', 'jp', 'de', 'fr', 'it', 'es', 'ru', 'br', 'au', 'ca', 'in', 'sg', 'hk',
+    'tw', 'pt', 'pl', 'kr', 'se', 'no', 'dk', 'fi', 'be', 'nl', 'ch', 'cz', 'at', 'mx', 'za',
+    'tr', 'il', 'ar', 'cl', 'id', 'th', 'my', 'ph', 'vn', 'nz', 'ie', 'gr', 'hu', 'ro', 'bg',
+    'sk', 'si', 'lt', 'lv', 'ee', 'ua', 'pe'
+]);
+
+const SKIPPED_CATEGORIES = [
+    "Chrome Internal",
+    "Uncategorized",
+    "AI No Category",
+    "Local File"
+];
+
+const GEMINI_MODEL = "gemini-2.5-flash-preview-05-20";
+const AI_REQUEST_DELAY_MS = 250;
+
 // --- 消息监听器，处理来自 popup.js 的不同请求 ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "aiGroup") {
@@ -122,6 +140,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 sendResponse({ status: error.message || "Ungroup failed.", type: "error" });
             });
         return true;
+
+    } else if (request.action === "setThemeIcon") {
+        updateActionIcon(Boolean(request.isDark))
+            .then(() => sendResponse({ status: "Icon updated", type: "info" }))
+            .catch(error => {
+                console.error("Failed to update icon:", error);
+                sendResponse({ status: error.message || "Icon update failed.", type: "error" });
+            });
+        return true;
     }
 });
 
@@ -142,10 +169,15 @@ async function organizeTabsWithAI() {
         return;
     }
 
-    // Use classifyTab (AI-first, URL fallback, Domain fallback)
-    const classificationPromises = ungroupedTabs.map(tab => classifyTab(tab, apiKey));
-    const classifications = await Promise.all(classificationPromises);
-    await groupTabs(classifications);
+    let classifications = [];
+    try {
+        classifications = await classifyTabsBatchWithAI(ungroupedTabs, apiKey);
+    } catch (error) {
+        console.warn("Batch AI classification failed, falling back to sequential strategy:", error.message);
+        classifications = await classifyTabsSequential(ungroupedTabs, apiKey);
+    }
+    const reconciled = reconcileClassifications(classifications);
+    await groupTabs(reconciled);
 }
 
 async function ungroupAllTabs() {
@@ -168,6 +200,18 @@ async function ungroupAllTabs() {
     }
 }
 
+async function updateActionIcon(isDarkMode) {
+    const iconPath = isDarkMode
+        ? { "16": "icons/icon_dark-16.png", "32": "icons/icon_dark-32.png" }
+        : { "16": "icons/icon_light-16.png", "32": "icons/icon_light-32.png" };
+    try {
+        await chrome.action.setIcon({ path: iconPath });
+    } catch (error) {
+        console.warn(`Could not update action icon to ${iconPath}:`, error.message);
+        throw error;
+    }
+}
+
 // --- Logic 2: URL Quick Organize (URL-first, Domain fallback) ---
 async function organizeTabsByUrl() {
     const tabs = await chrome.tabs.query({ currentWindow: true });
@@ -178,57 +222,118 @@ async function organizeTabsByUrl() {
     }
 
     // Use classifyTabByUrlOnly (URL-first, Domain fallback)
-    const classificationPromises = ungroupedTabs.map(classifyTabByUrlOnly);
-    const classifications = await Promise.all(classificationPromises);
-    await groupTabs(classifications);
+    const classifications = [];
+    for (const tab of ungroupedTabs) {
+        const result = await classifyTabByUrlOnly(tab);
+        classifications.push(result);
+    }
+    const reconciled = reconcileClassifications(classifications);
+    await groupTabs(reconciled);
+}
+
+async function classifyTabsSequential(tabs, apiKey) {
+    const results = [];
+    for (const tab of tabs) {
+        const result = await classifyTab(tab, apiKey);
+        results.push(result);
+        if (AI_REQUEST_DELAY_MS > 0) {
+            await wait(AI_REQUEST_DELAY_MS);
+        }
+    }
+    return results;
+}
+
+async function classifyTabsBatchWithAI(tabs, apiKey) {
+    if (!tabs || tabs.length === 0) {
+        return [];
+    }
+
+    const enumeratedTabs = tabs.map((tab, index) => ({
+        index: index + 1,
+        tab,
+        domain: getDomainFromUrl(tab.url)
+    }));
+
+    const aiResults = await getBatchCategoriesFromAI(enumeratedTabs, apiKey);
+    const indexToCategory = new Map();
+    for (const entry of aiResults) {
+        if (!entry) continue;
+        const idx = Number(entry.index ?? entry.id ?? entry.tab ?? entry.number);
+        const category = sanitizeCategory(entry.category);
+        if (Number.isInteger(idx) && idx > 0 && category) {
+            indexToCategory.set(idx, category);
+        }
+    }
+
+    const classifications = [];
+    for (const item of enumeratedTabs) {
+        const { index, tab, domain } = item;
+        let category = indexToCategory.get(index);
+
+        if (!category || SKIPPED_CATEGORIES.includes(category)) {
+            category = getCategoryByUrl(tab.url) || domain || "Uncategorized";
+        }
+
+        classifications.push({
+            tabId: tab.id,
+            category,
+            domain
+        });
+    }
+
+    return classifications;
 }
 
 
 // --- Classifier 1: AI-first, URL fallback, Domain fallback ---
 async function classifyTab(tab, apiKey) {
     if (!tab.url || tab.url.startsWith('chrome://')) {
-        return { tabId: tab.id, category: "Chrome Internal" };
+        return { tabId: tab.id, category: "Chrome Internal", domain: null };
     }
+
+    const domain = getDomainFromUrl(tab.url);
 
     // 1. If API Key is provided, try AI classification first
     if (apiKey) {
         try {
-            const content = await getTabContent(tab.id);
-            const aiCategory = await getCategoryFromAI(tab.title, content, apiKey);
-            
+            const aiCategory = await getCategoryFromAI(tab.title, tab.url, apiKey);
+
             if (aiCategory && aiCategory !== "Uncategorized" && aiCategory !== "AI No Category") {
-                return { tabId: tab.id, category: aiCategory }; // AI classification successful
+                return { tabId: tab.id, category: aiCategory, domain };
             }
         } catch (error) {
-            console.warn(`AI classification for ${tab.title} failed:`, error.message);
+            if (error?.status === 429) {
+                console.warn(`AI classification throttled for ${tab.title}, falling back to URL rules.`);
+            } else {
+                console.warn(`AI classification for ${tab.title} failed:`, error.message);
+            }
         }
     }
 
     // 2. Fallback: Try URL rules
     const urlCategory = getCategoryByUrl(tab.url);
     if (urlCategory) {
-        return { tabId: tab.id, category: urlCategory }; // URL rule matched
+        return { tabId: tab.id, category: urlCategory, domain }; // URL rule matched
     }
 
     // 3. Final fallback: Use domain name
-    const domain = getDomainFromUrl(tab.url);
-    return { tabId: tab.id, category: domain || "Uncategorized" }; // Default to domain
+    return { tabId: tab.id, category: domain || "Uncategorized", domain }; // Default to domain
 }
 
 // --- Classifier 2: URL Only (URL-first, Domain fallback) ---
 async function classifyTabByUrlOnly(tab) {
      if (!tab.url || tab.url.startsWith('chrome://')) {
-        return { tabId: tab.id, category: "Chrome Internal" };
+        return { tabId: tab.id, category: "Chrome Internal", domain: null };
     }
+    const domain = getDomainFromUrl(tab.url);
     // 1. Try predefined rules first
     const urlCategory = getCategoryByUrl(tab.url);
     if (urlCategory) {
-        return { tabId: tab.id, category: urlCategory };
+        return { tabId: tab.id, category: urlCategory, domain };
     }
 
     // 2. Fallback: Use domain name
-    const domain = getDomainFromUrl(tab.url);
-    return { tabId: tab.id, category: domain || "Uncategorized" }; // Default to domain
+    return { tabId: tab.id, category: domain || "Uncategorized", domain }; // Default to domain
 }
 
 
@@ -244,7 +349,7 @@ function getDomainFromUrl(url) {
         const urlObj = new URL(url);
         // This will be empty for file URLs if not caught above
         if (urlObj.hostname) {
-            return urlObj.hostname; // e.g., "www.google.com"
+            return stripCommonTld(urlObj.hostname); // e.g., "news.ycombinator"
         }
         return null;
     } catch (e) {
@@ -253,17 +358,21 @@ function getDomainFromUrl(url) {
     }
 }
 
-async function getTabContent(tabId) {
-    try {
-        const results = await chrome.scripting.executeScript({
-            target: { tabId: tabId },
-            func: () => document.body.innerText.substring(0, 4000)
-        });
-        return results[0].result || "";
-    } catch (e) {
-        console.warn(`Could not read content from tab ${tabId}`, e.message);
-        return "";
+function stripCommonTld(hostname) {
+    if (!hostname) return hostname;
+    const parts = hostname.split('.').filter(Boolean);
+    if (parts.length === 0) return hostname;
+
+    while (parts.length > 1) {
+        const last = parts[parts.length - 1].toLowerCase();
+        if (COMMON_TLDS.has(last)) {
+            parts.pop();
+        } else {
+            break;
+        }
     }
+
+    return parts.join('.');
 }
 
 function getCategoryByUrl(url) {
@@ -281,31 +390,82 @@ function getCategoryByUrl(url) {
     return null;
 }
 
-async function getCategoryFromAI(title, content, apiKey) {
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-    const prompt = `You are an efficient web tab classification assistant. Based on the following web page title and content summary, provide the most suitable category name. Keep the category name concise, for example: "Programming", "News", "Entertainment", "Social Media", "Learning", "Shopping". Return only the category name, without any extra explanation or punctuation. Web Page Title: "${title}" Content Summary: "${content}" Category Name is:`;
+function reconcileClassifications(classifications) {
+    const domainBuckets = new Map();
 
-    try {
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-
-        if (!response.ok) {
-            if (response.status === 400) {
-                 throw new Error(`API Request failed: Invalid API Key or malformed request.`);
-            }
-            throw new Error(`API Request failed, status code: ${response.status}`);
+    for (const item of classifications) {
+        if (!item.domain) continue;
+        if (!domainBuckets.has(item.domain)) {
+            domainBuckets.set(item.domain, []);
         }
-
-        const result = await response.json();
-        const category = result?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        return category ? category.replace(/['".,]/g, '') : "AI No Category";
-    } catch (error) {
-        console.error("Failed to call Gemini API:", error);
-        throw error;
+        domainBuckets.get(item.domain).push(item);
     }
+
+    for (const [domain, items] of domainBuckets.entries()) {
+        if (items.length <= 1) continue;
+        const distinctCategories = new Set(items.map(entry => entry.category));
+        if (distinctCategories.size <= 1) continue;
+
+        const preferredCategory = pickPreferredCategory(items, domain);
+        for (const entry of items) {
+            entry.category = preferredCategory;
+        }
+    }
+
+    return classifications;
+}
+
+function pickPreferredCategory(items, fallbackCategory) {
+    const counts = new Map();
+    for (const { category } of items) {
+        if (!category || SKIPPED_CATEGORIES.includes(category)) continue;
+        counts.set(category, (counts.get(category) || 0) + 1);
+    }
+
+    if (counts.size === 0) {
+        return fallbackCategory || "Uncategorized";
+    }
+
+    let winner = null;
+    let max = -1;
+    for (const [category, count] of counts.entries()) {
+        if (count > max || (count === max && category < winner)) {
+            winner = category;
+            max = count;
+        }
+    }
+
+    return winner || fallbackCategory || "Uncategorized";
+}
+
+async function getBatchCategoriesFromAI(enumeratedTabs, apiKey) {
+    const listText = enumeratedTabs.map(({ index, tab }) => {
+        const safeTitle = (tab.title || "").replace(/\s+/g, " ").trim();
+        const safeUrl = tab.url || "";
+        return `${index}. Title: "${safeTitle}" | URL: "${safeUrl}"`;
+    }).join("\n");
+
+    const prompt = `You are an efficient web tab classification assistant. For each tab listed below, decide the most appropriate category name such as "Programming", "News", "Entertainment", "Social Media", "Learning", "Shopping", or another concise label.
+
+Return JSON array only, using the exact format [{"index":1,"category":"CategoryName"}, ...]. Do not include explanations or additional text.
+
+Tabs to classify:
+${listText}`;
+
+    const text = await callGemini(prompt, apiKey);
+    const parsed = parseJsonArrayFromText(text);
+    return parsed;
+}
+
+async function getCategoryFromAI(title, url, apiKey) {
+    const prompt = `You are an efficient web tab classification assistant. Classify the browser tab using only its title and URL. Pick the most appropriate category name such as "Programming", "News", "Entertainment", "Social Media", "Learning", "Shopping", or another concise label. Respond with the category name only, no punctuation or explanations.
+Title: "${title}"
+URL: "${url}"
+Category:`;
+
+    const text = await callGemini(prompt, apiKey);
+    const category = sanitizeCategory(text);
+    return category || "AI No Category";
 }
 
 async function groupTabs(classifications) {
@@ -316,14 +476,6 @@ async function groupTabs(classifications) {
             categoryToGroupId.set(group.title, group.id);
         }
     }
-
-    // *** UPDATED LIST OF CATEGORIES TO SKIP ***
-    const SKIPPED_CATEGORIES = [
-        "Chrome Internal", 
-        "Uncategorized", 
-        "AI No Category", 
-        "Local File" // Don't group local files unless AI gives them a real category
-    ];
 
     for (const item of classifications) {
         const { tabId, category } = item;
@@ -345,4 +497,79 @@ async function groupTabs(classifications) {
             console.warn(`Error grouping tabId ${tabId}:`, e.message);
         }
     }
+}
+
+function sanitizeCategory(raw) {
+    if (!raw || typeof raw !== "string") {
+        return "";
+    }
+    return raw.trim().replace(/['".,]/g, '');
+}
+
+async function callGemini(prompt, apiKey) {
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            const message = response.status === 400
+                ? `API Request failed: Invalid API Key or malformed request.`
+                : `API Request failed, status code: ${response.status}`;
+            const error = new Error(errorText ? `${message} Details: ${errorText}` : message);
+            error.status = response.status;
+            throw error;
+        }
+
+        const result = await response.json();
+        return result?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    } catch (error) {
+        console.error("Failed to call Gemini API:", error);
+        throw error;
+    }
+}
+
+function parseJsonArrayFromText(text) {
+    if (!text) {
+        throw new Error("AI response is empty.");
+    }
+
+    const trimmed = text.trim();
+    try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+            return parsed;
+        }
+    } catch (e) {
+        // try to recover below
+    }
+
+    const start = trimmed.indexOf("[");
+    const end = trimmed.lastIndexOf("]");
+    if (start !== -1 && end !== -1 && end > start) {
+        const slice = trimmed.slice(start, end + 1);
+        try {
+            const parsed = JSON.parse(slice);
+            if (Array.isArray(parsed)) {
+                return parsed;
+            }
+        } catch (e) {
+            const sanitized = slice.replace(/,\s*]/g, "]");
+            const parsed = JSON.parse(sanitized);
+            if (Array.isArray(parsed)) {
+                return parsed;
+            }
+        }
+    }
+
+    throw new Error("AI response is not a valid JSON array.");
+}
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }

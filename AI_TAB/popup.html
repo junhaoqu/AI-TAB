@@ -11,7 +11,7 @@
         <p class="description">Keep your tabs tidy and organized.</p>
         
         <button id="quick-group" class="btn primary">
-            🚀 Quick Organize (URL-based)
+            🚀 Quick Organize
         </button>
 
         <div class="divider">
@@ -19,14 +19,19 @@
         </div>
 
         <button id="ai-group" class="btn primary ai-button">
-            ✨ AI Smart Organize (Content-based)
+            ✨ AI Smart Organize
+        </button>
+
+        <button id="open-settings" class="btn primary">
+            ⚙️ Settings
         </button>
 
         <button id="ungroup-tabs" class="btn secondary">
-            🔄 Ungroup All Tabs (Current Window)
+            🔄 Ungroup All Tabs
         </button>
         
-        <!-- API Key section - Initially hidden --><div id="api-key-section" class="form-section hidden">
+        <!-- API Key section -->
+        <div id="api-key-section" class="form-section hidden">
             <p class="section-description">
                 Enter your Google Gemini API Key for AI-powered grouping.
             </p>
@@ -37,6 +42,9 @@
                     <button id="save-key" class="btn small">Save</button>
                 </div>
             </div>
+            <a id="api-key-doc" class="help-link hidden" href="https://ai.google.dev/gemini-api/docs/api-key#set-api-env-var" target="_blank" rel="noopener noreferrer" title="How to get a Gemini API key">
+                🔗 How to get API key
+            </a>
         </div>
 
         <div id="status-message" class="status"></div>
