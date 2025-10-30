@@ -358,15 +358,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (localPromptButton) {
         localPromptButton.addEventListener('click', async () => {
-            showStatus('Organizing tabs with local AI...', 'info');
+            showStatus('Organizing tabs with Chrome AI...', 'info');
             disableButtons(true);
             apiKeySection.classList.add('hidden');
             apiKeyHelpLink.classList.add('hidden');
             try {
                 await runLocalPromptGrouping();
             } catch (error) {
-                console.error('Local prompt grouping failed:', error);
-                showStatus(error.message || 'Local prompt grouping failed. Falling back to quick organize.', 'error');
+                console.error('Chrome AI grouping failed:', error);
+                showStatus(error.message || 'Chrome AI grouping failed. Falling back to quick organize.', 'error');
                 chrome.runtime.sendMessage({ action: "quickGroup" }, (response) => {
                     handleResponse(response);
                 });
@@ -380,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // AI 分组前，检查内存中是否有 API Key
         if (currentApiKey) {
             // 如果有 Key，直接发送 "aiGroup" 指令
-            showStatus('Initiating AI smart organization...', 'info');
+            showStatus('Initiating online AI organization...', 'info');
             disableButtons(true);
             apiKeySection.classList.add('hidden');
             apiKeyHelpLink.classList.add('hidden');
@@ -557,7 +557,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const availability = await LanguageModel.availability?.({
-            outputLanguage: PROMPT_OUTPUT_LANGUAGE
+            outputLanguage: PROMPT_OUTPUT_LANGUAGE,
+            responseLanguage: PROMPT_OUTPUT_LANGUAGE
         }) ?? 'unavailable';
         if (availability === 'unavailable') {
             throw new Error('Prompt API unavailable on this device.');
@@ -566,8 +567,15 @@ document.addEventListener('DOMContentLoaded', () => {
             throw new Error('Please click again to download the model (user activation required).');
         }
 
-        const params = await LanguageModel.params?.();
-        const sessionOptions = {};
+        const params = await LanguageModel.params?.({
+            outputLanguage: PROMPT_OUTPUT_LANGUAGE,
+            responseLanguage: PROMPT_OUTPUT_LANGUAGE
+        });
+        const sessionOptions = {
+            model: '1.5-flash',
+            outputLanguage: PROMPT_OUTPUT_LANGUAGE,
+            responseLanguage: PROMPT_OUTPUT_LANGUAGE
+        };
         if (params && typeof params.defaultTopK !== 'undefined' && typeof params.defaultTemperature !== 'undefined') {
             sessionOptions.topK = params.defaultTopK;
             sessionOptions.temperature = params.defaultTemperature;
@@ -575,19 +583,22 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionOptions.monitor = (monitor) => {
             monitor.addEventListener('downloadprogress', (event) => {
                 const percent = event.total ? Math.round((event.loaded / event.total) * 100) : Math.round(event.loaded * 100);
-                showStatus(`Downloading local model... ${percent}%`, 'info');
+                showStatus(`Downloading Chrome AI model... ${percent}%`, 'info');
             });
         };
 
-        showStatus('Preparing local model...', 'info');
+        showStatus('Preparing Chrome AI model...', 'info');
         sessionOptions.outputLanguage = PROMPT_OUTPUT_LANGUAGE;
         const session = await LanguageModel.create(sessionOptions);
 
-        showStatus('Classifying tabs with local model...', 'info');
+        showStatus('Classifying tabs with Chrome AI...', 'info');
         const promptText = buildPromptPayload(ungroupedTabs);
         let rawResponse = '';
         try {
-            const result = await session.prompt(promptText, { outputLanguage: PROMPT_OUTPUT_LANGUAGE });
+            const result = await session.prompt(promptText, {
+                outputLanguage: PROMPT_OUTPUT_LANGUAGE,
+                responseLanguage: PROMPT_OUTPUT_LANGUAGE
+            });
             rawResponse = extractTextFromPromptResponse(result);
         } finally {
             session.destroy?.();
@@ -617,7 +628,11 @@ document.addEventListener('DOMContentLoaded', () => {
         let translator = null;
         if ('Translator' in self && typeof Translator.create === 'function') {
             try {
-                const availability = await Translator.availability({ sourceLanguage: 'en', targetLanguage });
+                const availability = await Translator.availability({ 
+                    sourceLanguage: 'en', 
+                    targetLanguage, 
+                    outputLanguage: PROMPT_OUTPUT_LANGUAGE 
+                });
                 if (availability !== 'unavailable') {
                     if ((availability === 'downloadable' || availability === 'downloading') && !(navigator.userActivation?.isActive)) {
                         console.warn('User activation required to download translator model.');
@@ -625,6 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     translator = await Translator.create({
                         sourceLanguage: 'en',
                         targetLanguage,
+                        outputLanguage: PROMPT_OUTPUT_LANGUAGE,
                         monitor(monitor) {
                             monitor.addEventListener('downloadprogress', (event) => {
                                 const percent = event.total ? Math.round((event.loaded / event.total) * 100) : Math.round(event.loaded * 100);
@@ -645,7 +661,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let translated = null;
             if (translator) {
                 try {
-                    translated = await translator.translate(title);
+                    translated = await translator.translate(title, { outputLanguage: PROMPT_OUTPUT_LANGUAGE });
                 } catch (error) {
                     console.warn(`Translator API failed for "${title}":`, error);
                 }

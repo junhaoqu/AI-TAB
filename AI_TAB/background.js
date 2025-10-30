@@ -146,10 +146,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (request.action === "localPromptGroup") {
         console.log("Received Local Prompt group command...");
         organizeTabsWithPromptAPI()
-            .then(message => sendResponse({ status: message || "Local Prompt Organize Complete!", type: "success" }))
+            .then(message => sendResponse({ status: message || "Chrome AI Organize Complete!", type: "success" }))
             .catch(error => {
-                console.error("Local Prompt Organize failed:", error);
-                sendResponse({ status: error.message || "Local Prompt Organize failed.", type: "error" });
+                console.error("Chrome AI Organize failed:", error);
+                sendResponse({ status: error.message || "Chrome AI Organize failed.", type: "error" });
             });
         return true;
     
@@ -304,7 +304,7 @@ async function organizeTabsWithPromptAPI() {
     const classifications = await classifyTabsUsingPromptAPI(ungroupedTabs, promptHandle);
     const reconciled = reconcileClassifications(classifications);
     await groupTabs(reconciled);
-    return "Local Prompt Organize Complete!";
+    return "Chrome AI Organize Complete!";
 }
 
 async function classifyTabsSequential(tabs, apiKey) {
