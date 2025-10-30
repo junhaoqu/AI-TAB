@@ -192,3 +192,62 @@ label {
     background-color: #e2f2ff;
     border: 1px solid #bee5eb;
 }
+
+.group-list-section {
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.group-list-section h2 {
+    font-size: 16px;
+    margin: 0;
+    color: #2c3e50;
+}
+
+.group-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.group-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border: 1px solid #dfe3eb;
+    border-radius: 8px;
+    background: #f8f9fb;
+}
+
+.group-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.group-title {
+    font-weight: 600;
+    color: #1f2933;
+}
+
+.group-meta {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.group-placeholder {
+    font-size: 13px;
+    color: #6c757d;
+    text-align: center;
+    margin: 0;
+}
+
+.group-list .btn {
+    width: auto;
+    min-width: 90px;
+}

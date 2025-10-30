@@ -107,14 +107,26 @@ const SKIPPED_CATEGORIES = [
 ];
 
 const GEMINI_MODEL = "gemini-2.5-flash-preview-05-20";
+const GEMINI_PRICING_URL = "https://ai.google.dev/gemini-api/docs/pricing";
 const AI_REQUEST_DELAY_MS = 250;
+
+function getPromptApiHandle() {
+    const scope = globalThis || self;
+    if (!scope) return null;
+    if (scope.promptAPI?.generate) return scope.promptAPI.generate.bind(scope.promptAPI);
+    if (scope.promptAPI?.run) return scope.promptAPI.run.bind(scope.promptAPI);
+    if (scope.PromptAPI?.generate) return scope.PromptAPI.generate.bind(scope.PromptAPI);
+    if (scope.ai?.prompt?.generate) return scope.ai.prompt.generate.bind(scope.ai.prompt);
+    if (scope.ai?.prompt?.run) return scope.ai.prompt.run.bind(scope.ai.prompt);
+    return null;
+}
 
 // --- 消息监听器，处理来自 popup.js 的不同请求 ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "aiGroup") {
         console.log("Received AI group command...");
         organizeTabsWithAI()
-            .then(() => sendResponse({ status: "AI Smart Organize Complete!", type: "success" }))
+            .then(message => sendResponse({ status: message || "AI Smart Organize Complete!", type: "success" }))
             .catch(error => {
                 console.error("AI Organize failed:", error);
                 sendResponse({ status: error.message || "AI Organize failed.", type: "error" });
@@ -124,12 +136,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (request.action === "quickGroup") {
         console.log("Received Quick group command...");
         organizeTabsByUrl()
-            .then(() => sendResponse({ status: "Quick Organize Complete!", type: "success" }))
+            .then(message => sendResponse({ status: message || "Quick Organize Complete!", type: "success" }))
             .catch(error => {
                 console.error("Quick Organize failed:", error);
                 sendResponse({ status: error.message || "Quick Organize failed.", type: "error" });
             });
         return true; // Keep channel open for async response
+    
+    } else if (request.action === "localPromptGroup") {
+        console.log("Received Local Prompt group command...");
+        organizeTabsWithPromptAPI()
+            .then(message => sendResponse({ status: message || "Local Prompt Organize Complete!", type: "success" }))
+            .catch(error => {
+                console.error("Local Prompt Organize failed:", error);
+                sendResponse({ status: error.message || "Local Prompt Organize failed.", type: "error" });
+            });
+        return true;
     
     } else if (request.action === "ungroupTabs") {
         console.log("Received Ungroup command...");
@@ -149,6 +171,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 sendResponse({ status: error.message || "Icon update failed.", type: "error" });
             });
         return true;
+    } else if (request.action === "listGroups") {
+        listCurrentWindowGroups()
+            .then(groups => sendResponse({ groups }))
+            .catch(error => {
+                console.error("Failed to list groups:", error);
+                sendResponse({ status: error.message || "Unable to list groups.", type: "error" });
+            });
+        return true;
+    } else if (request.action === "ungroupGroup") {
+        const groupId = Number(request.groupId);
+        if (!Number.isInteger(groupId)) {
+            sendResponse({ status: "Invalid group identifier.", type: "error" });
+            return;
+        }
+        ungroupSpecificGroup(groupId)
+            .then(message => sendResponse({ status: message, type: "success" }))
+            .catch(error => {
+                console.error("Ungroup specific group failed:", error);
+                sendResponse({ status: error.message || "Ungroup failed.", type: "error" });
+            });
+        return true;
+    } else if (request.action === "applyClassifications") {
+        applyProvidedClassifications(request.classifications)
+            .then(message => sendResponse({ status: message, type: "success" }))
+            .catch(error => {
+                console.error("Failed to apply classifications:", error);
+                sendResponse({ status: error.message || "Failed to apply classifications.", type: "error" });
+            });
+        return true;
+    } else if (request.action === "getModelInfo") {
+        sendResponse({ model: GEMINI_MODEL, pricingUrl: GEMINI_PRICING_URL });
     }
 });
 
@@ -166,7 +219,7 @@ async function organizeTabsWithAI() {
     const ungroupedTabs = tabs.filter(tab => tab.groupId === TAB_GROUP_ID_NONE);
     if (ungroupedTabs.length === 0) {
         console.log("No ungrouped tabs to organize.");
-        return;
+        return "No ungrouped tabs to organize.";
     }
 
     let classifications = [];
@@ -178,6 +231,7 @@ async function organizeTabsWithAI() {
     }
     const reconciled = reconcileClassifications(classifications);
     await groupTabs(reconciled);
+    return "AI Smart Organize Complete!";
 }
 
 async function ungroupAllTabs() {
@@ -218,7 +272,7 @@ async function organizeTabsByUrl() {
     const ungroupedTabs = tabs.filter(tab => tab.groupId === TAB_GROUP_ID_NONE);
     if (ungroupedTabs.length === 0) {
         console.log("No ungrouped tabs to organize.");
-        return;
+        return "No ungrouped tabs to organize.";
     }
 
     // Use classifyTabByUrlOnly (URL-first, Domain fallback)
@@ -229,6 +283,28 @@ async function organizeTabsByUrl() {
     }
     const reconciled = reconcileClassifications(classifications);
     await groupTabs(reconciled);
+    return "Quick Organize Complete!";
+}
+
+async function organizeTabsWithPromptAPI() {
+    const promptHandle = getPromptApiHandle();
+    if (!promptHandle) {
+        console.warn("Local Prompt API is not available; falling back to URL-based grouping.");
+        const fallbackMessage = await organizeTabsByUrl();
+        return `Local Prompt API unavailable. ${fallbackMessage || "Used Quick Organize instead."}`;
+    }
+
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    const ungroupedTabs = tabs.filter(tab => tab.groupId === TAB_GROUP_ID_NONE);
+    if (ungroupedTabs.length === 0) {
+        console.log("No ungrouped tabs to organize.");
+        return "No ungrouped tabs to organize.";
+    }
+
+    const classifications = await classifyTabsUsingPromptAPI(ungroupedTabs, promptHandle);
+    const reconciled = reconcileClassifications(classifications);
+    await groupTabs(reconciled);
+    return "Local Prompt Organize Complete!";
 }
 
 async function classifyTabsSequential(tabs, apiKey) {
@@ -438,6 +514,64 @@ function pickPreferredCategory(items, fallbackCategory) {
     return winner || fallbackCategory || "Uncategorized";
 }
 
+async function classifyTabsUsingPromptAPI(tabs, promptGenerator) {
+    const inputs = tabs.map((tab, index) => ({
+        index: index + 1,
+        title: (tab.title || "").slice(0, 256),
+        url: tab.url || "",
+        domain: getDomainFromUrl(tab.url)
+    }));
+
+    const payload = {
+        task: "tab_grouping",
+        prompt: "Classify each browser tab into a concise category name (<=3 words).",
+        tabs: inputs.map(item => ({
+            index: item.index,
+            title: item.title,
+            url: item.url
+        }))
+    };
+
+    const response = await promptGenerator(payload);
+    const records = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.results)
+            ? response.results
+            : Array.isArray(response?.data)
+                ? response.data
+                : Array.isArray(response?.output)
+                    ? response.output
+                    : response?.candidates;
+
+    if (!Array.isArray(records) || records.length === 0) {
+        throw new Error("Prompt API returned no results.");
+    }
+
+    const indexToCategory = new Map();
+    for (const entry of records) {
+        if (!entry) continue;
+        const idx = Number(entry.index ?? entry.id ?? entry.tab ?? entry.order);
+        const rawCategory = entry.category ?? entry.label ?? entry.result ?? entry.output;
+        const category = sanitizeCategory(typeof rawCategory === "string" ? rawCategory : "");
+        if (Number.isInteger(idx) && idx > 0 && category) {
+            indexToCategory.set(idx, category);
+        }
+    }
+
+    return inputs.map(item => {
+        const tab = tabs[item.index - 1];
+        let category = indexToCategory.get(item.index);
+        if (!category || SKIPPED_CATEGORIES.includes(category)) {
+            category = getCategoryByUrl(tab.url) || item.domain || "Uncategorized";
+        }
+        return {
+            tabId: tab.id,
+            category,
+            domain: item.domain
+        };
+    });
+}
+
 async function getBatchCategoriesFromAI(enumeratedTabs, apiKey) {
     const listText = enumeratedTabs.map(({ index, tab }) => {
         const safeTitle = (tab.title || "").replace(/\s+/g, " ").trim();
@@ -499,11 +633,85 @@ async function groupTabs(classifications) {
     }
 }
 
+async function listCurrentWindowGroups() {
+    const groups = await chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+    const snapshot = [];
+    for (const group of groups) {
+        const tabsInGroup = await chrome.tabs.query({ groupId: group.id });
+        snapshot.push({
+            id: group.id,
+            title: group.title || `Group ${group.id}`,
+            color: group.color || null,
+            tabCount: tabsInGroup.length
+        });
+    }
+    snapshot.sort((a, b) => {
+        const titleA = (a.title || "").toLowerCase();
+        const titleB = (b.title || "").toLowerCase();
+        return titleA.localeCompare(titleB);
+    });
+    return snapshot;
+}
+
+async function ungroupSpecificGroup(groupId) {
+    let groupTitle = `Group ${groupId}`;
+    try {
+        const group = await chrome.tabGroups.get(groupId);
+        if (group?.title) {
+            groupTitle = group.title;
+        }
+    } catch (error) {
+        // group may already be gone; keep default title
+    }
+
+    const tabs = await chrome.tabs.query({ groupId });
+    if (tabs.length === 0) {
+        return `Group "${groupTitle}" already has no tabs.`;
+    }
+
+    const tabIds = tabs.map(tab => tab.id);
+    await chrome.tabs.ungroup(tabIds);
+    return `Ungrouped ${tabs.length} tab(s) from "${groupTitle}".`;
+}
+
 function sanitizeCategory(raw) {
     if (!raw || typeof raw !== "string") {
         return "";
     }
     return raw.trim().replace(/['".,]/g, '');
+}
+
+async function applyProvidedClassifications(classifications) {
+    if (!Array.isArray(classifications) || classifications.length === 0) {
+        throw new Error("No classifications provided.");
+    }
+
+    const sanitized = [];
+    for (const item of classifications) {
+        if (!item) continue;
+        const tabId = Number(item.tabId ?? item.tabID ?? item.id);
+        if (!Number.isInteger(tabId)) continue;
+        const category = sanitizeCategory(item.category);
+        if (!category) continue;
+        let domain = item.domain || null;
+        if (!domain) {
+            try {
+                const tab = await chrome.tabs.get(tabId);
+                domain = getDomainFromUrl(tab?.url);
+            } catch (error) {
+                domain = null;
+            }
+        }
+        sanitized.push({ tabId, category, domain });
+    }
+
+    if (sanitized.length === 0) {
+        throw new Error("No valid classifications provided.");
+    }
+
+    const reconciled = reconcileClassifications(sanitized);
+    await groupTabs(reconciled);
+    return "Grouping complete.";
 }
 
 async function callGemini(prompt, apiKey) {

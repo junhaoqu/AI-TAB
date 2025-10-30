@@ -30,6 +30,33 @@ h1 {
     margin: 0;
 }
 
+.model-info {
+    background: #f8fafc;
+    border: 1px solid #dbe4f3;
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.model-info h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.model-summary {
+    font-size: 14px;
+    color: #2d3640;
+    line-height: 1.4;
+}
+
+.model-summary code {
+    background: #e0e7ff;
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
 .form-group {
     display: flex;
     flex-direction: column;
@@ -39,6 +66,22 @@ h1 {
 label {
     font-weight: 600;
     font-size: 14px;
+}
+
+select {
+    padding: 12px;
+    font-size: 15px;
+    border: 1px solid #d1d9e6;
+    border-radius: 8px;
+    background: #f8fafc;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    background: #fff;
 }
 
 input[type="password"],
@@ -93,6 +136,13 @@ input[type="text"]:focus {
 .btn.secondary:hover {
     box-shadow: 0 4px 12px rgba(148, 163, 184, 0.2);
     transform: translateY(-1px);
+}
+
+.note {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #5f6b7c;
+    line-height: 1.4;
 }
 
 .btn.danger {

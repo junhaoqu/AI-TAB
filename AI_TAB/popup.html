@@ -22,6 +22,10 @@
             ✨ AI Smart Organize
         </button>
 
+        <button id="local-prompt-group" class="btn primary">
+            🧠 Local Prompt Organize
+        </button>
+
         <button id="open-settings" class="btn primary">
             ⚙️ Settings
         </button>
@@ -45,6 +49,13 @@
             <a id="api-key-doc" class="help-link hidden" href="https://ai.google.dev/gemini-api/docs/api-key#set-api-env-var" target="_blank" rel="noopener noreferrer" title="How to get a Gemini API key">
                 🔗 How to get API key
             </a>
+        </div>
+
+        <div class="group-list-section">
+            <h2>Current Tab Groups</h2>
+            <div id="group-list" class="group-list">
+                <p class="group-placeholder">Loading groups…</p>
+            </div>
         </div>
 
         <div id="status-message" class="status"></div>

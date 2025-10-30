@@ -3,11 +3,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveButton = document.getElementById('save-api-key');
     const clearButton = document.getElementById('clear-api-key');
     const toggleButton = document.getElementById('toggle-visibility');
+    const languageSelect = document.getElementById('group-language');
     const status = document.getElementById('status');
 
     let showingText = false;
 
     loadStoredKey();
+    loadGroupLanguage();
 
     saveButton.addEventListener('click', async () => {
         const raw = apiKeyInput.value.trim();
@@ -41,6 +43,19 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleButton.textContent = showingText ? 'Hide' : 'Show';
     });
 
+    if (languageSelect) {
+        languageSelect.addEventListener('change', async () => {
+            const value = languageSelect.value || 'browser';
+            try {
+                await chrome.storage.sync.set({ groupLanguage: value });
+                showStatus('Grouping language updated.', 'success');
+            } catch (error) {
+                showStatus('Failed to update language preference.', 'error');
+                console.error('Failed to save grouping language:', error);
+            }
+        });
+    }
+
     function loadStoredKey() {
         chrome.storage.sync.get('apiKey', (data) => {
             if (chrome.runtime.lastError) {
@@ -55,5 +70,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function showStatus(message, type) {
         status.textContent = message;
         status.className = `status ${type}`;
+    }
+
+    function loadGroupLanguage() {
+        if (!languageSelect) return;
+        chrome.storage.sync.get('groupLanguage', (data) => {
+            if (chrome.runtime.lastError) {
+                console.error('Failed to load grouping language:', chrome.runtime.lastError);
+                return;
+            }
+            const stored = data.groupLanguage || 'browser';
+            const hasOption = Array.from(languageSelect.options).some(option => option.value === stored);
+            languageSelect.value = hasOption ? stored : 'browser';
+        });
     }
 });
