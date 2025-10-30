@@ -45,3 +45,6 @@ Power users will appreciate the streamlined settings panel. From there you manag
 6.  **Manage Settings:**
     * Click the **⚙️ Settings** button to access the options page.
     * Here you can manage your API key and set your preferred **Grouping language** for the AI-generated group titles.
+
+
+## Video Linke: https://youtu.be/D2GasDFfuUY
