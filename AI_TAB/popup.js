@@ -1,3 +1,5 @@
+const PROMPT_OUTPUT_LANGUAGE = 'en';
+
 const CATEGORY_TRANSLATIONS = {
     "zh-cn": {
         "Programming": "编程",
@@ -444,7 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusMessage.textContent = previousText;
                 statusMessage.className = previousClass;
                 refreshGroups();
-            });
+            }); 
         } else {
             refreshGroups();
         }
@@ -554,7 +556,9 @@ document.addEventListener('DOMContentLoaded', () => {
             throw new Error('Prompt API not supported in this browser.');
         }
 
-        const availability = await LanguageModel.availability?.() ?? 'unavailable';
+        const availability = await LanguageModel.availability?.({
+            outputLanguage: PROMPT_OUTPUT_LANGUAGE
+        }) ?? 'unavailable';
         if (availability === 'unavailable') {
             throw new Error('Prompt API unavailable on this device.');
         }
@@ -576,13 +580,14 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         showStatus('Preparing local model...', 'info');
+        sessionOptions.outputLanguage = PROMPT_OUTPUT_LANGUAGE;
         const session = await LanguageModel.create(sessionOptions);
 
         showStatus('Classifying tabs with local model...', 'info');
         const promptText = buildPromptPayload(ungroupedTabs);
         let rawResponse = '';
         try {
-            const result = await session.prompt(promptText);
+            const result = await session.prompt(promptText, { outputLanguage: PROMPT_OUTPUT_LANGUAGE });
             rawResponse = extractTextFromPromptResponse(result);
         } finally {
             session.destroy?.();
